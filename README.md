@@ -63,6 +63,22 @@ El proyecto viene configurado por defecto en **Modo Mock**. Esto significa que p
 
 ---
 
+## 📱 Acceso desde Móvil (Red Local)
+
+Para probar la aplicación en tu celular sin subirla a internet:
+
+1.  Asegúrate que tu PC y Celular estén en el mismo Wi-Fi.
+2.  Ejecuta el frontend exponiendo la red:
+    ```bash
+    npm run dev -- --host
+    ```
+3.  La terminal mostrará una dirección IP (ej. `http://192.168.1.15:5173`).
+4.  Ingresa esa dirección en el navegador de tu celular.
+
+**Nota:** Si usas el backend real, deberás configurar `API_URL` en `services/api.ts` con la IP de tu PC en lugar de `localhost`.
+
+---
+
 ## 🛠️ Stack Tecnológico
 
 *   **Frontend:** React 18, Vite, TypeScript.

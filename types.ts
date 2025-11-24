@@ -93,7 +93,6 @@ export interface ScholarshipApplication {
   id: string;
   student_id: string;
   type_id: string;
-  reason?: string;
   status: 'pending' | 'approved' | 'rejected';
   student_name?: string; // For UI display
   scholarship_name?: string; // For UI display

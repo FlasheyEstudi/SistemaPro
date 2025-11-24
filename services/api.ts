@@ -2,7 +2,7 @@
 import { Campus, User, Role, Course, Enrollment, Notification, Resource, Attendance, ScholarshipType, ScholarshipApplication, Note, Career } from '../types';
 
 // --- CONFIG ---
-const USE_MOCK = true; // Mantener true para demo frontend, false para producción
+const USE_MOCK = false; // Mantener true para demo frontend, false para producción
 const API_URL = 'http://localhost:3000/api';
 
 const request = async (endpoint: string, options: RequestInit = {}) => {
@@ -184,7 +184,7 @@ export const api = {
     if (!USE_MOCK) { const query = studentId ? `?studentId=${studentId}` : ''; return request(`/scholarship-applications${query}`); }
     return MOCK_SCHOLARSHIP_APPS.map(a => ({ ...a, student_name: 'Mock Student', scholarship_name: MOCK_SCHOLARSHIP_TYPES.find(t => t.id === a.type_id)?.name }));
   },
-  applyForScholarship: async (studentId: string, typeId: string, reason: string) => !USE_MOCK ? request('/scholarship-applications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type_id: typeId, reason, status: 'pending' }) }) : (MOCK_SCHOLARSHIP_APPS.push({ id: `sa${Date.now()}`, student_id: studentId, type_id: typeId, reason, status: 'pending' }), Promise.resolve()),
+  applyForScholarship: async (studentId: string, typeId: string, reason: string) => !USE_MOCK ? request('/scholarship-applications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type_id: typeId, status: 'pending' }) }) : (MOCK_SCHOLARSHIP_APPS.push({ id: `sa${Date.now()}`, student_id: studentId, type_id: typeId, status: 'pending' }), Promise.resolve()),
   updateScholarshipStatus: async (id: string, status: string) => !USE_MOCK ? request(`/scholarship-applications/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }) : (MOCK_SCHOLARSHIP_APPS.find(a => a.id === id)!.status = status as any, Promise.resolve()),
 
   // --- STATS (Free University Update) ---

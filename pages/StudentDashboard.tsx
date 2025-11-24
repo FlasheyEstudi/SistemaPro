@@ -81,8 +81,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
           setProfileData(currentUser);
       } else if (currentView === 'classroom' && activeClassroomCourseId) {
           const res = await api.getResources(activeClassroomCourseId);
-          // Filter private resources for this student
-          const myResources = res.filter(r => r.target_type !== 'student' || r.target_student_id === currentUser.id);
+          const myResources = res.filter(r => !r.target_type || r.target_type === 'all' || (r.target_type === 'student' && r.target_student_id === currentUser.id));
           setClassroomResources(myResources);
       }
   };
@@ -112,13 +111,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
       if(!currentUser) return;
       await api.enrollStudent(currentUser.id, selectedCoursesToEnroll);
       setShowEnrollModal(false);
-      
-      if(window.confirm('¡Inscripción Exitosa! ¿Deseas descargar tu hoja de matrícula?')) {
-         exportEnrollmentSheet(selectedCoursesToEnroll);
-      }
-
-      setSelectedCoursesToEnroll([]);
       setToast({ type: 'success', title: 'Inscripción Completa', message: 'Materias registradas.' });
+      setShowExportModal({
+          isOpen: true,
+          title: 'Hoja de Matrícula',
+          action: () => exportEnrollmentSheet(selectedCoursesToEnroll)
+      });
+      setSelectedCoursesToEnroll([]);
       fetchData();
   };
   
@@ -157,7 +156,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
 
   const exportKardex = () => {
       if(!currentUser || !currentCampus) return;
-      const data = enrollments.map(e => [
+      // Sort by period for cleaner PDF
+      const sorted = [...enrollments].sort((a,b) => (a.course?.period || '').localeCompare(b.course?.period || ''));
+      
+      const data = sorted.map(e => [
+          e.course?.period || '-',
           e.course?.code || '',
           e.course?.name || '',
           e.grade_p1.toString(),
@@ -180,7 +183,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
                   `Promedio Global: ${getAverage()}%`
               ]
           },
-          ['Código', 'Asignatura', 'I Parc', 'II Parc', 'Examen', 'Nota Final', 'Asist'],
+          ['Periodo', 'Código', 'Asignatura', 'I Parc', 'II Parc', 'Examen', 'Nota Final', 'Asist'],
           data
       );
   };
@@ -232,249 +235,247 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
       e.preventDefault();
       if(!currentUser) return;
       await api.createNote({ student_id: currentUser.id, ...newNote, is_completed: false });
+      setToast({ type: 'success', title: 'Nota Guardada', message: 'Nota agregada a tu bloc.' });
       setNewNote({ title: '', content: '', is_task: false });
       fetchData();
   };
 
-  // --- VIEWS ---
-
-  const ClassroomView = () => {
-      const currentCourse = enrollments.find(e => e.course_id === activeClassroomCourseId)?.course;
-      
-      return (
-          <div className="space-y-6 fade-in-up">
-              <div className="flex items-center gap-4 mb-6">
-                  <button onClick={() => onChangeView('overview')} className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50"><ChevronLeft size={20}/></button>
-                  <div>
-                      <h2 className="text-2xl font-bold text-gray-900">{currentCourse?.name}</h2>
-                      <p className="text-gray-500">Aula Virtual • Recursos y Materiales</p>
-                  </div>
-              </div>
-
-              {classroomResources.length === 0 ? (
-                  <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                          <FileText size={32}/>
-                      </div>
-                      <h3 className="font-bold text-gray-400">Sin recursos publicados</h3>
-                      <p className="text-xs text-gray-300 mt-1">El profesor aún no ha subido materiales.</p>
-                  </div>
-              ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {classroomResources.map(res => (
-                          <div key={res.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all flex items-start gap-4 group">
-                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md shrink-0
-                                  ${res.type === 'video' ? 'bg-red-500' : res.type === 'link' ? 'bg-blue-500' : res.type === 'image' ? 'bg-purple-500' : 'bg-orange-500'}`}>
-                                  {res.type === 'video' ? <Video size={24}/> : res.type === 'link' ? <LinkIcon size={24}/> : res.type === 'image' ? <ImageIcon size={24}/> : <FileText size={24}/>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-gray-800 truncate">{res.title}</h4>
-                                  <p className="text-xs text-gray-500 mt-1 uppercase font-bold tracking-wider">{res.type}</p>
-                                  <p className="text-[10px] text-gray-400 mt-2">Publicado el {new Date(res.created_at).toLocaleDateString()}</p>
-                                  
-                                  <div className="mt-3 flex gap-2">
-                                      {/* Logic to handle link vs local file */}
-                                      {res.url ? (
-                                           <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors inline-block">
-                                               Abrir Enlace
-                                           </a>
-                                      ) : res.file_data ? (
-                                           <a href={res.file_data} download={res.title} className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-black transition-colors inline-flex items-center gap-1">
-                                               <Download size={12}/> Descargar
-                                           </a>
-                                      ) : null}
-
-                                      {/* Image Preview */}
-                                      {res.type === 'image' && res.file_data && (
-                                          <button onClick={() => {
-                                              const w = window.open("");
-                                              w?.document.write(`<img src="${res.file_data}" style="max-width:100%"/>`);
-                                          }} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-50 transition-colors">
-                                              Ver Imagen
-                                          </button>
-                                      )}
-                                  </div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              )}
-          </div>
-      );
-  }
-
-  const OverviewTab = () => (
-      <div className="space-y-6 fade-in-up">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Average Chart */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group hover:shadow-lg transition-all">
-                  <div className="relative z-10">
-                      <p className="text-gray-500 font-bold text-sm">Promedio Global</p>
-                      <h3 className="text-4xl font-bold text-blue-600 mt-2">{getAverage()}%</h3>
-                      <p className="text-xs text-gray-400 mt-1">Rendimiento Académico</p>
-                  </div>
-                  <div className="w-24 h-24 relative transform group-hover:scale-110 transition-transform duration-500">
-                      <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="48" cy="48" r="40" stroke="#eff6ff" strokeWidth="8" fill="transparent" />
-                          <circle cx="48" cy="48" r="40" stroke="#2563eb" strokeWidth="8" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * Number(getAverage()) / 100)} />
-                      </svg>
-                  </div>
-              </div>
-
-              {/* Next Class */}
-              <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-3xl shadow-lg shadow-indigo-200 text-white flex flex-col justify-between relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-xl group-hover:scale-150 transition-transform duration-700"></div>
-                  <div>
-                      <div className="flex items-center gap-2 mb-2 opacity-80">
-                          <Clock size={16}/> <span className="text-xs font-bold uppercase tracking-wider">Ahora / Próxima</span>
-                      </div>
-                      <h3 className="text-xl font-bold leading-tight z-10 relative">{nextClass ? nextClass.course?.name : "Día Libre"}</h3>
-                      {nextClass && <p className="text-sm opacity-80">{nextClass.course?.schedule}</p>}
-                  </div>
-                  {nextClass ? (
-                      <button onClick={() => { enterClassroom(nextClass.course_id); onChangeView('classroom'); }} className="mt-4 bg-white/20 hover:bg-white/30 backdrop-blur-sm py-2 px-4 rounded-xl text-xs font-bold transition-all w-fit flex items-center gap-2">
-                          Entrar al Aula <ArrowRight size={14}/>
-                      </button>
-                  ) : <div className="mt-4 h-8"></div>}
-              </div>
-
-              {/* Quick Notes Widget */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                  <div className="flex justify-between items-center mb-4">
-                      <h4 className="font-bold text-gray-800">Bloc de Notas Rápido</h4>
-                      <StickyNote size={16} className="text-amber-500"/>
-                  </div>
-                  <div className="space-y-2 mb-3 max-h-24 overflow-y-auto">
-                      {notes.length === 0 ? <p className="text-xs text-gray-400">No hay notas pendientes.</p> : notes.slice(0,3).map(n => (
-                          <div key={n.id} className="text-xs border-b border-gray-50 pb-1">
-                              <span className="font-bold">{n.title}</span> <span className="text-gray-500">- {n.content.substring(0,20)}...</span>
-                          </div>
-                      ))}
-                  </div>
-                  <form onSubmit={handleCreateNote} className="flex gap-2">
-                      <input className="flex-1 bg-gray-50 border-none rounded-lg text-xs p-2 text-gray-800" placeholder="Escribir nota..." value={newNote.title} onChange={e => setNewNote({...newNote, title: e.target.value, content: e.target.value})} required/>
-                      <button type="submit" className="bg-gray-900 text-white p-2 rounded-lg"><PlusCircle size={14}/></button>
-                  </form>
-              </div>
-          </div>
-
-          {/* Current Classes */}
-          <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Mis Clases</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {enrollments.map(e => (
-                      <div key={e.id} className="bg-white p-5 rounded-2xl border border-gray-200 flex justify-between items-center hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
-                           onClick={() => { enterClassroom(e.course_id); onChangeView('classroom'); }}>
-                          <div>
-                              <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded mb-1 inline-block border border-blue-100">{e.course?.code}</span>
-                              <h4 className="font-bold text-gray-800">{e.course?.name}</h4>
-                              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Clock size={10}/> {e.course?.schedule}</p>
-                          </div>
-                          <div className="text-right">
-                              <div className="text-2xl font-bold text-gray-900">{((e.grade_p1 * 0.3) + (e.grade_p2 * 0.3) + (e.grade_final * 0.4)).toFixed(1)}</div>
-                              <p className="text-[10px] text-gray-400 uppercase font-bold">Nota Actual</p>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </div>
-  );
-
-  const ProfileTab = () => (
-    <div className="space-y-6 fade-in-up pb-10">
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative">
-             <div className="h-48 bg-gradient-to-r from-blue-500 to-indigo-600 relative group">
-                 {/* Cover Upload */}
-                 {isEditingProfile && (
-                     <div className="absolute top-4 right-4 bg-white/80 p-4 rounded-xl shadow-lg w-64 backdrop-blur-md">
-                         <p className="text-xs font-bold mb-2">Cambiar Portada</p>
-                         <ImageUpload label="" currentImage={profileData.cover_url} onImageChange={(d) => setProfileData({...profileData, cover_url: d})} shape="rect"/>
-                     </div>
-                 )}
-                 {profileData.cover_url && <img src={profileData.cover_url} className="absolute inset-0 w-full h-full object-cover opacity-50" alt="" />}
-             </div>
-
-             <div className="px-8 pb-8 relative">
-                  <div className="flex flex-col md:flex-row items-start md:items-end -mt-16 mb-6 gap-6">
-                      <div className="relative group mx-auto md:mx-0">
-                           <img src={profileData.avatar_url} className="w-32 h-32 rounded-3xl border-4 border-white shadow-xl bg-white object-cover" alt="Profile" />
-                           {isEditingProfile && (
-                              <div className="absolute top-0 left-0 w-full h-full bg-black/50 rounded-3xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <div className="bg-white p-2 rounded-lg"><ImageUpload label="" currentImage={profileData.avatar_url} onImageChange={(d) => setProfileData({...profileData, avatar_url: d})} shape="circle"/></div>
-                              </div>
-                          )}
-                      </div>
-                      <div className="flex-1 mb-2 text-center md:text-left">
-                          <h2 className="text-3xl font-bold text-gray-900">{profileData.full_name}</h2>
-                          <p className="text-gray-500 font-medium">{profileData.meta_data?.career_name || 'Estudiante'}</p>
-                      </div>
-                      <div className="flex justify-center md:justify-end w-full md:w-auto">
-                         {!isEditingProfile ? (
-                             <button onClick={() => setIsEditingProfile(true)} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 shadow-lg shadow-gray-200 transition-all flex items-center gap-2"><Edit2 size={16}/> Editar Perfil</button>
-                         ) : (
-                             <div className="flex gap-2">
-                                 <button onClick={() => setIsEditingProfile(false)} className="bg-white text-gray-600 border border-gray-200 px-6 py-3 rounded-xl font-bold">Cancelar</button>
-                                 <button onClick={() => { api.updateUser(currentUser!.id, profileData); setUser(profileData as User); setIsEditingProfile(false); setToast({type: 'success', title: 'Perfil Guardado', message: 'Datos actualizados correctamente.'}); }} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700"><Save size={16}/> Guardar</button>
-                             </div>
-                         )}
-                      </div>
-                  </div>
-                  
-                  {isEditingProfile ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 border-t border-gray-100 pt-8">
-                           <div>
-                               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><UserIcon size={18}/> Datos Personales</h3>
-                               <div className="space-y-4">
-                                   <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Dirección" value={profileData.meta_data?.address} onChange={e => setProfileData({...profileData, meta_data: {...profileData.meta_data, address: e.target.value}})} />
-                                   <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Teléfono" value={profileData.meta_data?.phone} onChange={e => setProfileData({...profileData, meta_data: {...profileData.meta_data, phone: e.target.value}})} />
-                                   <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Email Personal" value={profileData.email} onChange={e => setProfileData({...profileData, email: e.target.value})} />
-                               </div>
-                           </div>
-                           <div>
-                               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Lock size={18}/> Seguridad</h3>
-                               <div className="bg-gray-50 p-6 rounded-2xl">
-                                   <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Nueva Contraseña</label>
-                                   <div className="flex gap-2">
-                                       <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="flex-1 p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="••••••••" />
-                                       <button onClick={handleChangePassword} className="bg-gray-900 text-white px-4 rounded-xl font-bold text-sm">Actualizar</button>
-                                   </div>
-                               </div>
-                           </div>
-                      </div>
-                  ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                               <p className="text-xs font-bold text-gray-400 uppercase mb-1">Carnet</p>
-                               <p className="font-bold text-gray-800">{profileData.meta_data?.carnet}</p>
-                           </div>
-                           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                               <p className="text-xs font-bold text-gray-400 uppercase mb-1">Cédula</p>
-                               <p className="font-bold text-gray-800">{profileData.meta_data?.cedula}</p>
-                           </div>
-                           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                               <p className="text-xs font-bold text-gray-400 uppercase mb-1">Correo Institucional</p>
-                               <p className="font-bold text-gray-800">{profileData.email}</p>
-                           </div>
-                           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                               <p className="text-xs font-bold text-gray-400 uppercase mb-1">Teléfono</p>
-                               <p className="font-bold text-gray-800">{profileData.meta_data?.phone || 'No registrado'}</p>
-                           </div>
-                      </div>
-                  )}
-             </div>
-        </div>
-    </div>
-  );
+  // --- RENDERING VIEWS INLINED TO FIX FOCUS ISSUES ---
 
   return (
     <div className="space-y-6 relative">
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
 
-      {currentView === 'overview' && <OverviewTab />}
-      {currentView === 'classroom' && <ClassroomView />}
-      {currentView === 'profile' && <ProfileTab />}
+      {/* OVERVIEW VIEW */}
+      {currentView === 'overview' && (
+        <div className="space-y-6 fade-in-up">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Average Chart */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between relative overflow-hidden group hover:shadow-lg transition-all">
+                    <div className="relative z-10">
+                        <p className="text-gray-500 font-bold text-sm">Promedio Global</p>
+                        <h3 className="text-4xl font-bold text-blue-600 mt-2">{getAverage()}%</h3>
+                        <p className="text-xs text-gray-400 mt-1">Rendimiento Académico</p>
+                    </div>
+                    <div className="w-24 h-24 relative transform group-hover:scale-110 transition-transform duration-500">
+                        <svg className="w-full h-full transform -rotate-90">
+                            <circle cx="48" cy="48" r="40" stroke="#eff6ff" strokeWidth="8" fill="transparent" />
+                            <circle cx="48" cy="48" r="40" stroke="#2563eb" strokeWidth="8" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * Number(getAverage()) / 100)} />
+                        </svg>
+                    </div>
+                </div>
+
+                {/* Next Class */}
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-3xl shadow-lg shadow-indigo-200 text-white flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-xl group-hover:scale-150 transition-transform duration-700"></div>
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 opacity-80">
+                            <Clock size={16}/> <span className="text-xs font-bold uppercase tracking-wider">Ahora / Próxima</span>
+                        </div>
+                        <h3 className="text-xl font-bold leading-tight z-10 relative">{nextClass ? nextClass.course?.name : "Día Libre"}</h3>
+                        {nextClass && <p className="text-sm opacity-80">{nextClass.course?.schedule}</p>}
+                    </div>
+                    {nextClass ? (
+                        <button onClick={() => { enterClassroom(nextClass.course_id); onChangeView('classroom'); }} className="mt-4 bg-white/20 hover:bg-white/30 backdrop-blur-sm py-2 px-4 rounded-xl text-xs font-bold transition-all w-fit flex items-center gap-2">
+                            Entrar al Aula <ArrowRight size={14}/>
+                        </button>
+                    ) : <div className="mt-4 h-8"></div>}
+                </div>
+
+                {/* Quick Notes Widget - FIX APPLIED: Input is now stable in tree */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-bold text-gray-800">Bloc de Notas Rápido</h4>
+                        <StickyNote size={16} className="text-amber-500"/>
+                    </div>
+                    <div className="space-y-2 mb-3 max-h-24 overflow-y-auto">
+                        {notes.length === 0 ? <p className="text-xs text-gray-400">No hay notas pendientes.</p> : notes.slice(0,3).map(n => (
+                            <div key={n.id} className="text-xs border-b border-gray-50 pb-1">
+                                <span className="font-bold">{n.title}</span> <span className="text-gray-500">- {n.content.substring(0,20)}...</span>
+                            </div>
+                        ))}
+                    </div>
+                    <form onSubmit={handleCreateNote} className="flex gap-2">
+                        <input 
+                            className="flex-1 bg-gray-50 border-none rounded-lg text-xs p-2 text-gray-800 outline-none focus:ring-1 focus:ring-blue-300" 
+                            placeholder="Escribir nota..." 
+                            value={newNote.title} 
+                            onChange={e => setNewNote({...newNote, title: e.target.value, content: e.target.value})} 
+                            required
+                        />
+                        <button type="submit" className="bg-gray-900 text-white p-2 rounded-lg hover:bg-black"><PlusCircle size={14}/></button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Current Classes */}
+            <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Mis Clases</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {enrollments.map(e => (
+                        <div key={e.id} className="bg-white p-5 rounded-2xl border border-gray-200 flex justify-between items-center hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                             onClick={() => { enterClassroom(e.course_id); onChangeView('classroom'); }}>
+                            <div>
+                                <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded mb-1 inline-block border border-blue-100">{e.course?.code}</span>
+                                <h4 className="font-bold text-gray-800">{e.course?.name}</h4>
+                                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Clock size={10}/> {e.course?.schedule}</p>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-2xl font-bold text-gray-900">{((e.grade_p1 * 0.3) + (e.grade_p2 * 0.3) + (e.grade_final * 0.4)).toFixed(1)}</div>
+                                <p className="text-[10px] text-gray-400 uppercase font-bold">Nota Actual</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* CLASSROOM VIEW */}
+      {currentView === 'classroom' && (
+        <div className="space-y-6 fade-in-up">
+            <div className="flex items-center gap-4 mb-6">
+                <button onClick={() => onChangeView('overview')} className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50"><ChevronLeft size={20}/></button>
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{enrollments.find(e => e.course_id === activeClassroomCourseId)?.course?.name}</h2>
+                    <p className="text-gray-500">Aula Virtual • Recursos y Materiales</p>
+                </div>
+            </div>
+
+            {classroomResources.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                        <FileText size={32}/>
+                    </div>
+                    <h3 className="font-bold text-gray-400">Sin recursos publicados</h3>
+                    <p className="text-xs text-gray-300 mt-1">El profesor aún no ha subido materiales.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {classroomResources.map(res => (
+                        <div key={res.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all flex items-start gap-4 group">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md shrink-0
+                                ${res.type === 'video' ? 'bg-red-500' : res.type === 'link' ? 'bg-blue-500' : res.type === 'image' ? 'bg-purple-500' : 'bg-orange-500'}`}>
+                                {res.type === 'video' ? <Video size={24}/> : res.type === 'link' ? <LinkIcon size={24}/> : res.type === 'image' ? <ImageIcon size={24}/> : <FileText size={24}/>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-800 truncate">{res.title}</h4>
+                                <p className="text-xs text-gray-500 mt-1 uppercase font-bold tracking-wider">{res.type}</p>
+                                <p className="text-[10px] text-gray-400 mt-2">Publicado el {new Date(res.created_at).toLocaleDateString()}</p>
+                                
+                                <div className="mt-3 flex gap-2">
+                                    {res.url ? (
+                                            <a href={res.url} target="_blank" rel="noopener noreferrer" className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors inline-block">
+                                                Abrir Enlace
+                                            </a>
+                                    ) : res.file_data ? (
+                                            <a href={res.file_data} download={res.title} className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-black transition-colors inline-flex items-center gap-1">
+                                                <Download size={12}/> Descargar
+                                            </a>
+                                    ) : null}
+
+                                    {res.type === 'image' && res.file_data && (
+                                        <button onClick={() => {
+                                            const w = window.open("");
+                                            w?.document.write(`<img src="${res.file_data}" style="max-width:100%"/>`);
+                                        }} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-50 transition-colors">
+                                            Ver Imagen
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+      )}
+
+      {/* PROFILE VIEW */}
+      {currentView === 'profile' && (
+        <div className="space-y-6 fade-in-up pb-10">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative">
+                <div className="h-48 bg-gradient-to-r from-blue-500 to-indigo-600 relative group">
+                    {isEditingProfile && (
+                        <div className="absolute top-4 right-4 bg-white/80 p-4 rounded-xl shadow-lg w-64 backdrop-blur-md">
+                            <p className="text-xs font-bold mb-2">Cambiar Portada</p>
+                            <ImageUpload label="" currentImage={profileData.cover_url} onImageChange={(d) => setProfileData({...profileData, cover_url: d})} shape="rect"/>
+                        </div>
+                    )}
+                    {profileData.cover_url && <img src={profileData.cover_url} className="absolute inset-0 w-full h-full object-cover opacity-50" alt="" />}
+                </div>
+
+                <div className="px-8 pb-8 relative">
+                    <div className="flex flex-col md:flex-row items-start md:items-end -mt-16 mb-6 gap-6">
+                        <div className="relative group mx-auto md:mx-0">
+                            <img src={profileData.avatar_url} className="w-32 h-32 rounded-3xl border-4 border-white shadow-xl bg-white object-cover" alt="Profile" />
+                            {isEditingProfile && (
+                                <div className="absolute top-0 left-0 w-full h-full bg-black/50 rounded-3xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="bg-white p-2 rounded-lg"><ImageUpload label="" currentImage={profileData.avatar_url} onImageChange={(d) => setProfileData({...profileData, avatar_url: d})} shape="circle"/></div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 mb-2 text-center md:text-left">
+                            <h2 className="text-3xl font-bold text-gray-900">{profileData.full_name}</h2>
+                            <p className="text-gray-500 font-medium">{profileData.meta_data?.career_name || 'Estudiante'}</p>
+                        </div>
+                        <div className="flex justify-center md:justify-end w-full md:w-auto">
+                            {!isEditingProfile ? (
+                                <button onClick={() => setIsEditingProfile(true)} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 shadow-lg shadow-gray-200 transition-all flex items-center gap-2"><Edit2 size={16}/> Editar Perfil</button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button onClick={() => setIsEditingProfile(false)} className="bg-white text-gray-600 border border-gray-200 px-6 py-3 rounded-xl font-bold">Cancelar</button>
+                                    <button onClick={() => { api.updateUser(currentUser!.id, profileData); setUser(profileData as User); setIsEditingProfile(false); setToast({type: 'success', title: 'Perfil Guardado', message: 'Datos actualizados correctamente.'}); }} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700"><Save size={16}/> Guardar</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {isEditingProfile ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 border-t border-gray-100 pt-8">
+                            <div>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><UserIcon size={18}/> Datos Personales</h3>
+                                <div className="space-y-4">
+                                    <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Dirección" value={profileData.meta_data?.address} onChange={e => setProfileData({...profileData, meta_data: {...profileData.meta_data, address: e.target.value}})} />
+                                    <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Teléfono" value={profileData.meta_data?.phone} onChange={e => setProfileData({...profileData, meta_data: {...profileData.meta_data, phone: e.target.value}})} />
+                                    <input className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900" placeholder="Email Personal" value={profileData.email} onChange={e => setProfileData({...profileData, email: e.target.value})} />
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Lock size={18}/> Seguridad</h3>
+                                <div className="bg-gray-50 p-6 rounded-2xl">
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Nueva Contraseña</label>
+                                    <div className="flex gap-2">
+                                        <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="flex-1 p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="••••••••" />
+                                        <button onClick={handleChangePassword} className="bg-gray-900 text-white px-4 rounded-xl font-bold text-sm">Actualizar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Carnet</p>
+                                <p className="font-bold text-gray-800">{profileData.meta_data?.carnet}</p>
+                            </div>
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Cédula</p>
+                                <p className="font-bold text-gray-800">{profileData.meta_data?.cedula}</p>
+                            </div>
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Correo Institucional</p>
+                                <p className="font-bold text-gray-800">{profileData.email}</p>
+                            </div>
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Teléfono</p>
+                                <p className="font-bold text-gray-800">{profileData.meta_data?.phone || 'No registrado'}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+      )}
       
       {currentView === 'enroll' && (
         <div className="fade-in-up bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
@@ -525,38 +526,60 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ currentView, onChan
           </div>
       )}
 
-      {currentView === 'history' && <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 fade-in-up">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-              <div><h3 className="text-xl font-bold text-gray-900">Historial Académico</h3><p className="text-sm text-gray-500">Kardex de notas y asistencia</p></div>
-              <button onClick={() => confirmExport('Kardex de Notas', exportKardex)} className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 shadow-lg shadow-gray-200 transition-transform hover:-translate-y-1 w-full sm:w-auto justify-center"><Download size={16}/> Exportar PDF</button>
+      {currentView === 'history' && (
+      <div className="space-y-6 fade-in-up">
+          {/* Kardex Summary Header */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Promedio General</p>
+                  <h3 className="text-3xl font-bold text-blue-600 mt-2">{getAverage()}%</h3>
+              </div>
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Asignaturas Cursadas</p>
+                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{enrollments.length}</h3>
+              </div>
+               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Estado Académico</p>
+                  <h3 className="text-3xl font-bold text-green-600 mt-2">{Number(getAverage()) >= 70 ? 'Activo / Aprobado' : 'En Riesgo'}</h3>
+              </div>
           </div>
-          <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                  <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase">
-                      <tr>
-                          <th className="px-4 py-3 rounded-l-xl">Asignatura</th>
-                          <th className="px-4 py-3 text-center">I Parcial</th>
-                          <th className="px-4 py-3 text-center">II Parcial</th>
-                          <th className="px-4 py-3 text-center">Final</th>
-                          <th className="px-4 py-3 text-center">Nota</th>
-                          <th className="px-4 py-3 text-center rounded-r-xl">Asistencia</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                      {enrollments.map(e => (
-                          <tr key={e.id} className="hover:bg-gray-50 transition-colors group">
-                              <td className="px-4 py-4 font-medium text-sm text-gray-800 group-hover:text-blue-600 transition-colors">{e.course?.name}</td>
-                              <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_p1}</td>
-                              <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_p2}</td>
-                              <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_final}</td>
-                              <td className="px-4 py-4 text-center font-bold text-blue-600 text-base">{((e.grade_p1 * 0.3) + (e.grade_p2 * 0.3) + (e.grade_final * 0.4)).toFixed(1)}</td>
-                              <td className="px-4 py-4 text-center"><span className={`px-2 py-1 rounded text-xs font-bold ${(e.attendance_rate || 100) > 85 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.attendance_rate || 100}%</span></td>
+
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                  <div><h3 className="text-xl font-bold text-gray-900">Historial Académico</h3><p className="text-sm text-gray-500">Kardex de notas oficial</p></div>
+                  <button onClick={() => confirmExport('Kardex de Notas', exportKardex)} className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 shadow-lg shadow-gray-200 transition-transform hover:-translate-y-1 w-full sm:w-auto justify-center"><Download size={16}/> Descargar Kardex</button>
+              </div>
+              <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase">
+                          <tr>
+                              <th className="px-4 py-3 rounded-l-xl">Periodo</th>
+                              <th className="px-4 py-3">Asignatura</th>
+                              <th className="px-4 py-3 text-center">I Parcial</th>
+                              <th className="px-4 py-3 text-center">II Parcial</th>
+                              <th className="px-4 py-3 text-center">Final</th>
+                              <th className="px-4 py-3 text-center">Nota</th>
+                              <th className="px-4 py-3 text-center rounded-r-xl">Asistencia</th>
                           </tr>
-                      ))}
-                  </tbody>
-              </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                          {[...enrollments].sort((a,b) => (a.course?.period || '').localeCompare(b.course?.period || '')).map(e => (
+                              <tr key={e.id} className="hover:bg-gray-50 transition-colors group">
+                                  <td className="px-4 py-4 text-xs font-bold text-gray-500 uppercase">{e.course?.period}</td>
+                                  <td className="px-4 py-4 font-medium text-sm text-gray-800 group-hover:text-blue-600 transition-colors">{e.course?.name} <span className="text-gray-400 text-xs ml-1">({e.course?.code})</span></td>
+                                  <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_p1}</td>
+                                  <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_p2}</td>
+                                  <td className="px-4 py-4 text-center text-sm font-mono text-gray-600">{e.grade_final}</td>
+                                  <td className="px-4 py-4 text-center font-bold text-blue-600 text-base">{((e.grade_p1 * 0.3) + (e.grade_p2 * 0.3) + (e.grade_final * 0.4)).toFixed(1)}</td>
+                                  <td className="px-4 py-4 text-center"><span className={`px-2 py-1 rounded text-xs font-bold ${(e.attendance_rate || 100) > 85 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{e.attendance_rate || 100}%</span></td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
           </div>
-      </div>}
+      </div>
+      )}
       
       {currentView === 'scholarships' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6 fade-in-up">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">

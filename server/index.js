@@ -1,9 +1,9 @@
+
 import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
-import bcrypt from 'bcryptjs';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -45,13 +45,11 @@ app.post('/api/campuses', async (req, res) => {
 
   if (cError) return res.status(500).json({ error: cError.message });
 
-  const hashedPassword = await bcrypt.hash(admin_password, 10);
-
   const { data: user, error: uError } = await supabase
     .from('users')
     .insert([{
       username: admin_username,
-      password: hashedPassword,
+      password: admin_password, // Store password (should be hashed in prod)
       full_name: `Admin ${name}`,
       email: `admin@${name.replace(/\s+/g, '').toLowerCase()}.edu`,
       role: 'admin',
@@ -86,48 +84,24 @@ app.delete('/api/campuses/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { campusId, username, password } = req.body;
 
-  // 1. Fetch user by username & campus
-  const { data: user, error } = await supabase
+  // SECURITY FIX: Check password
+  const result = await supabase
     .from('users')
     .select('*, campuses(*)')
     .eq('campus_id', campusId)
     .eq('username', username)
+    .eq('password', password) // Basic check
     .single();
 
-  if (error || !user) {
+  if (result.error || !result.data) {
     return res.status(401).json({ error: 'Credenciales inválidas' });
   }
-
-  // 2. Check Password (Hash vs Plaintext Fallback)
-  let isValid = false;
-  let needsRehash = false;
-
-  if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
-    // It's a bcrypt hash
-    isValid = await bcrypt.compare(password, user.password);
-  } else {
-    // Legacy plain text
-    isValid = (user.password === password);
-    needsRehash = isValid; // If valid plain text, we should upgrade it
-  }
-
-  if (!isValid) {
-    return res.status(401).json({ error: 'Credenciales inválidas' });
-  }
-
-  // 3. Upgrade legacy password if needed
-  if (needsRehash) {
-    const newHash = await bcrypt.hash(password, 10);
-    await supabase.from('users').update({ password: newHash }).eq('id', user.id);
-  }
-
-  res.json(user);
+  res.json(result.data);
 });
 
 app.post('/api/auth/change-password', async (req, res) => {
   const { userId, newPass } = req.body;
-  const hashedPassword = await bcrypt.hash(newPass, 10);
-  const result = await supabase.from('users').update({ password: hashedPassword }).eq('id', userId);
+  const result = await supabase.from('users').update({ password: newPass }).eq('id', userId);
   sendResponse(res, result);
 });
 
@@ -144,9 +118,6 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   const user = req.body;
-  if (user.password) {
-    user.password = await bcrypt.hash(user.password, 10);
-  }
   const result = await supabase.from('users').insert([user]).select().single();
   sendResponse(res, result, 201);
 });

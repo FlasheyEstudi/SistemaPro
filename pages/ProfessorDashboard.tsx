@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useStore } from '../store';
-import { Course, Enrollment, Attendance, Resource, User, ToastMessage } from '../types';
-import { Save, Calendar, Clock, Paperclip, Video, FileText, Plus, Link as LinkIcon, Download, Mail, Phone, Edit2, CheckSquare, Image as ImageIcon, Briefcase, Lock } from 'lucide-react';
+import { Course, Enrollment, Attendance, Resource, User, ToastMessage, Notification } from '../types';
+import { Save, Calendar, Clock, Paperclip, Video, FileText, Plus, Link as LinkIcon, Download, Mail, Phone, Edit2, CheckSquare, Image as ImageIcon, Briefcase, Lock, Bell, Monitor } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import Modal from '../components/Modal';
 import { generateProfessionalPDF } from '../utils/pdfGenerator';
@@ -21,6 +21,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
   // Settings & Profile
@@ -45,11 +46,13 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
         setCourses(data);
         if (data.length > 0) setSelectedCourse(data[0].id);
       });
+      // Load Notifications
+      api.getNotifications(currentUser.id).then(setNotifications);
     }
   }, [currentUser]);
 
   useEffect(() => {
-    if (selectedCourse && currentView !== 'overview' && currentView !== 'settings') {
+    if (selectedCourse && currentView !== 'overview' && currentView !== 'settings' && currentView !== 'notifications') {
       loadCourseData();
     }
   }, [selectedCourse, attendanceDate, currentView]);
@@ -233,25 +236,70 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
                   <p className="text-amber-100 mt-2">Bienvenido, {currentUser?.full_name}. Tienes <strong className="text-white">{todaysClasses.length} clases</strong> hoy.</p>
               </div>
 
-              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-                  <h3 className="font-bold text-gray-900 mb-4">Agenda del Día</h3>
-                  {todaysClasses.length === 0 ? <p className="text-gray-400 text-sm">No hay clases programadas.</p> : (
-                      <div className="space-y-3">
-                          {todaysClasses.map(c => (
-                              <div key={c.id} className="p-4 border border-gray-100 rounded-xl hover:shadow-md transition-all flex justify-between items-center">
-                                  <div>
-                                      <p className="font-bold text-gray-800">{c.name}</p>
-                                      <p className="text-xs text-gray-500">{c.code} • {c.schedule}</p>
-                                  </div>
-                                  <button onClick={() => setSelectedCourse(c.id)} className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-xs font-bold">Gestionar</button>
-                              </div>
-                          ))}
-                      </div>
-                  )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={18}/> Agenda del Día</h3>
+                    {todaysClasses.length === 0 ? <p className="text-gray-400 text-sm">No hay clases programadas.</p> : (
+                        <div className="space-y-3">
+                            {todaysClasses.map(c => (
+                                <div key={c.id} className="p-4 border border-gray-100 rounded-xl hover:shadow-md transition-all flex justify-between items-center">
+                                    <div>
+                                        <p className="font-bold text-gray-800">{c.name}</p>
+                                        <p className="text-xs text-gray-500">{c.code} • {c.schedule}</p>
+                                    </div>
+                                    <button onClick={() => setSelectedCourse(c.id)} className="px-4 py-2 bg-amber-50 text-amber-600 rounded-lg text-xs font-bold">Gestionar</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Bell size={18}/> Avisos Recientes</h3>
+                    {notifications.length === 0 ? <p className="text-gray-400 text-sm">No hay avisos nuevos.</p> : (
+                         <div className="space-y-3">
+                            {notifications.slice(0, 3).map(n => (
+                                <div key={n.id} className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                    <div className="flex justify-between items-start">
+                                        <h4 className="font-bold text-gray-800 text-sm">{n.title}</h4>
+                                        <span className="text-[10px] text-blue-500 font-bold">{new Date(n.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">{n.message}</p>
+                                </div>
+                            ))}
+                         </div>
+                    )}
+                </div>
               </div>
           </div>
       )
   };
+
+  const NotificationsTab = () => (
+      <div className="space-y-6 fade-in-up">
+           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3"><Bell className="text-amber-500"/> Centro de Avisos</h2>
+           <div className="grid gap-4">
+              {notifications.length === 0 ? (
+                  <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-gray-200">
+                      <p className="text-gray-400">No tienes notificaciones.</p>
+                  </div>
+              ) : (
+                  notifications.map(n => (
+                      <div key={n.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                          <div className="flex justify-between items-start mb-2">
+                              <h3 className="font-bold text-gray-900">{n.title}</h3>
+                              <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded">{new Date(n.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-gray-600 leading-relaxed text-sm">{n.message}</p>
+                          <div className="mt-3 text-xs font-bold text-amber-600 uppercase">
+                              De: {n.sender_name || 'Administración'}
+                          </div>
+                      </div>
+                  ))
+              )}
+           </div>
+      </div>
+  );
 
   const ProfileTab = () => (
       <div className="space-y-6 fade-in-up pb-10">
@@ -309,6 +357,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
   );
 
   if (currentView === 'overview') return <OverviewTab />;
+  if (currentView === 'notifications') return <NotificationsTab />;
   if (currentView === 'settings') return <ProfileTab />;
 
   return (
@@ -320,7 +369,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
          <h2 className="text-xl font-bold text-gray-800">
             {currentView === 'grades' && 'Libro de Calificaciones'}
             {currentView === 'attendance' && 'Control de Asistencia'}
-            {currentView === 'resources' && 'Aula Virtual (Recursos)'}
+            {currentView === 'resources' && 'Gestión de Aula Virtual'}
          </h2>
         <select className="bg-white border border-gray-200 text-gray-700 py-2.5 px-4 rounded-xl shadow-sm outline-none focus:border-blue-500 min-w-[200px]" onChange={(e) => setSelectedCourse(e.target.value)} value={selectedCourse || ''}>
           {courses.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
@@ -421,11 +470,15 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
                  <div className="flex justify-between items-center mb-6">
                      <div>
                          <h3 className="font-bold text-gray-800">Recursos de Aula</h3>
-                         <p className="text-sm text-gray-500">Materiales y Tareas</p>
+                         <p className="text-sm text-gray-500">Subir materiales, enlaces y tareas para los estudiantes.</p>
                      </div>
                      <button onClick={() => setShowResourceForm(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 shadow-md"><Plus size={16}/> Publicar Nuevo</button>
                  </div>
-                 {resources.length === 0 ? <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl">No hay recursos subidos.</div> : (
+                 {resources.length === 0 ? <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50">
+                    <Monitor size={48} className="mx-auto text-gray-300 mb-2" />
+                    <p className="font-bold">Aula Virtual Vacía</p>
+                    <p className="text-xs mt-1">Sube el primer recurso para este curso.</p>
+                 </div> : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          {resources.map(res => (
                              <a key={res.id} href={res.url || '#'} target="_blank" className="p-4 border border-gray-200 rounded-2xl flex items-center gap-4 hover:border-blue-300 hover:bg-blue-50 transition-all group relative overflow-hidden">
@@ -451,7 +504,7 @@ const ProfessorDashboard: React.FC<ProfessorDashboardProps> = ({ currentView }) 
       {showResourceForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-dark backdrop-blur-md">
             <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg fade-in-up max-h-[90vh] overflow-y-auto">
-                <h3 className="text-xl font-bold mb-6 text-gray-900">Publicar Contenido</h3>
+                <h3 className="text-xl font-bold mb-6 text-gray-900">Publicar en Aula Virtual</h3>
                 <form onSubmit={handlePublishResource} className="space-y-4">
                     
                     {/* Title */}

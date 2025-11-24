@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { Home, BookOpen, Users, Settings, LogOut, FileText, Bell, Paperclip, CheckSquare, Calendar, Award, Clock, PlusCircle, ClipboardList } from 'lucide-react';
+import { Home, BookOpen, Users, Settings, LogOut, FileText, Bell, Paperclip, CheckSquare, Calendar, Award, Clock, PlusCircle, ClipboardList, Monitor } from 'lucide-react';
 import { Role } from '../types';
 import Modal from './Modal';
 
@@ -32,7 +32,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           { id: 'overview', label: 'Inicio', icon: Home },
           { id: 'grades', label: 'Notas', icon: BookOpen },
           { id: 'attendance', label: 'Asistencia', icon: Users },
-          { id: 'resources', label: 'Recursos', icon: Paperclip },
+          { id: 'resources', label: 'Aula Virtual', icon: Monitor },
+          { id: 'notifications', label: 'Avisos', icon: Bell },
           { id: 'settings', label: 'Perfil', icon: Settings },
         ];
       case Role.STUDENT:
