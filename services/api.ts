@@ -3,7 +3,9 @@ import { Campus, User, Role, Course, Enrollment, Notification, Resource, Attenda
 
 // --- CONFIG ---
 const USE_MOCK = false; // Mantener true para demo frontend, false para producción
-const API_URL = 'http://localhost:3000/api';
+
+// ✅ API desplegada en Koyeb
+const API_URL = 'https://fat-natividad-unm-rma-11a42f76.koyeb.app/api';
 
 const request = async (endpoint: string, options: RequestInit = {}) => {
   const headers = {
