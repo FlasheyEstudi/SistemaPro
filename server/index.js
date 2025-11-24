@@ -4,6 +4,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import bcrypt from 'bcrypt';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -37,6 +38,9 @@ app.get('/api/campuses', async (req, res) => {
 app.post('/api/campuses', async (req, res) => {
   const { name, theme_color, logo_url, admin_username, admin_password, monthly_tuition } = req.body;
 
+  // Hash password
+  const hashedPassword = await bcrypt.hash(admin_password, 10);
+
   const { data: campus, error: cError } = await supabase
     .from('campuses')
     .insert([{ name, theme_color, logo_url, monthly_tuition: monthly_tuition || 150 }])
@@ -49,7 +53,7 @@ app.post('/api/campuses', async (req, res) => {
     .from('users')
     .insert([{
       username: admin_username,
-      password: admin_password, // Store password (should be hashed in prod)
+      password: hashedPassword,
       full_name: `Admin ${name}`,
       email: `admin@${name.replace(/\s+/g, '').toLowerCase()}.edu`,
       role: 'admin',
@@ -84,19 +88,33 @@ app.delete('/api/campuses/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { campusId, username, password } = req.body;
 
-  // SECURITY FIX: Check password
-  const result = await supabase
+  // Get user from database
+  const { data: user, error } = await supabase
     .from('users')
     .select('*, campuses(*)')
     .eq('campus_id', campusId)
     .eq('username', username)
-    .eq('password', password) // Basic check
     .single();
 
-  if (result.error || !result.data) {
+  if (error || !user) {
     return res.status(401).json({ error: 'Credenciales inválidas' });
   }
-  res.json(result.data);
+
+  // Check if password is hashed (starts with $2b$) or plain text
+  let passwordMatch = false;
+  if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
+    // Hashed password - use bcrypt
+    passwordMatch = await bcrypt.compare(password, user.password);
+  } else {
+    // Plain text password (legacy) - direct comparison
+    passwordMatch = password === user.password;
+  }
+
+  if (!passwordMatch) {
+    return res.status(401).json({ error: 'Credenciales inválidas' });
+  }
+
+  res.json(user);
 });
 
 app.post('/api/auth/change-password', async (req, res) => {
