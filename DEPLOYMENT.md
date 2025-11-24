@@ -52,26 +52,10 @@ Debemos decirle a React que deje de usar datos falsos y se conecte a tu backend 
     const API_URL = 'https://tu-backend-desplegado.com/api'; 
     ```
 
-3.  **Para Despliegue en Netlify (Frontend):**
-    *   Ya he creado el archivo `netlify.toml` necesario para que la navegación funcione correctamente.
-    *   Sube tus últimos cambios a GitHub:
-        ```bash
-        git add .
-        git commit -m "Add netlify config"
-        git push
-        ```
-    *   Ve a [Netlify](https://app.netlify.com/).
-    *   Regístrate/Inicia sesión con GitHub.
-    *   Click en **"Add new site"** -> **"Import an existing project"**.
-    *   Selecciona **GitHub** y busca tu repositorio `SistemaPro`.
-    *   En la configuración de despliegue (Build settings):
-        *   **Build command:** `npm run build`
-        *   **Publish directory:** `dist`
-    *   Click en **"Deploy site"**.
-    *   Una vez desplegado, ve a **Site configuration** -> **Environment variables**.
-    *   Añade las variables:
-        *   `VITE_API_URL`: (La URL de tu backend en Render/Koyeb, ej: `https://tu-app.koyeb.app/api`)
-        *   `VITE_USE_MOCK`: `false`
+3.  **Para Despliegue (Ej. Vercel / Netlify):**
+    *   Conecta tu repositorio de GitHub a Vercel/Netlify.
+    *   El comando de construcción es `npm run build`.
+    *   El directorio de salida es `dist`.
 
 ---
 

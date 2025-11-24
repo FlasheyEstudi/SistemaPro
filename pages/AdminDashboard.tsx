@@ -36,6 +36,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showUserForm, setShowUserForm] = useState(false);
   const [showCourseForm, setShowCourseForm] = useState(false);
+  const [showCareerForm, setShowCareerForm] = useState(false);
   const [editScholarship, setEditScholarship] = useState<ScholarshipType | null>(null);
   const [showCampusForm, setShowCampusForm] = useState(false);
   
@@ -56,6 +57,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
   const [periodType, setPeriodType] = useState('Cuatrimestre');
   const [periodNumber, setPeriodNumber] = useState('1');
   const [newCourse, setNewCourse] = useState({ name: '', code: '', career_id: '', professor_id: '', schedule: '', period: '' });
+  const [newCareer, setNewCareer] = useState({ name: '', code: '' });
   
   const [newScholarshipType, setNewScholarshipType] = useState({ name: '', percentage: 0, requirements: '' });
   const [campusSettings, setCampusSettings] = useState({ name: '', logo_url: '', monthly_tuition: 0 });
@@ -274,6 +276,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
       loadData();
   };
 
+  const handleCreateCareer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCampus) return;
+    await api.createCareer({ ...newCareer, campus_id: currentCampus.id });
+    setShowCareerForm(false);
+    setNewCareer({ name: '', code: '' });
+    setToast({ type: 'success', title: 'Carrera Creada', message: 'Nueva oferta académica agregada.' });
+    loadData();
+  };
+
+  const handleDeleteUser = async (id: string) => {
+      if(window.confirm('¿Seguro que desea eliminar este usuario?')) {
+          await api.deleteUser(id);
+          setToast({ type: 'success', title: 'Usuario Eliminado', message: 'El registro ha sido borrado.' });
+          loadData();
+      }
+  };
+
+  const handleDeleteCareer = async (id: string) => {
+      if(window.confirm('¿Eliminar carrera? Se borrarán las asignaturas asociadas.')) {
+          await api.deleteCareer(id);
+          setToast({ type: 'success', title: 'Carrera Eliminada', message: 'Oferta académica actualizada.' });
+          loadData();
+      }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+      if(window.confirm('¿Eliminar asignatura?')) {
+          await api.deleteCourse(id);
+          setToast({ type: 'success', title: 'Asignatura Eliminada', message: 'Pensum actualizado.' });
+          loadData();
+      }
+  };
+
   const handleEnrollStudent = async () => {
       if(!enrollStudentId || enrollSelectedCourses.length === 0) return;
       await api.enrollStudent(enrollStudentId, enrollSelectedCourses);
@@ -452,7 +488,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left min-w-[600px]">
                         <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase">
-                            <tr><th className="px-6 py-4">Usuario</th><th className="px-6 py-4">ID/Carnet</th><th className="px-6 py-4">Rol</th></tr>
+                            <tr><th className="px-6 py-4">Usuario</th><th className="px-6 py-4">ID/Carnet</th><th className="px-6 py-4">Rol</th><th className="px-6 py-4">Acciones</th></tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {users.map(u => (
@@ -463,6 +499,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{u.meta_data?.carnet || u.meta_data?.cedula || 'N/A'}</td>
                                     <td className="px-6 py-4"><span className={`px-2 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700 uppercase`}>{u.role}</span></td>
+                                    <td className="px-6 py-4">
+                                        <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -474,14 +513,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
 
       {currentView === 'academic' && (
         <div className="space-y-6 fade-in-up">
-            <div className="flex justify-end mb-4">
-                 <button onClick={() => setShowCourseForm(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm hover:bg-blue-700">
-                    <Plus size={16} /> Crear Asignatura
-                </button>
+            <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                 <h3 className="font-bold text-gray-800">Pensum y Oferta Académica</h3>
+                 <div className="flex gap-2">
+                     <button onClick={() => setShowCareerForm(true)} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl flex items-center gap-2 text-sm hover:bg-gray-200 font-bold border border-gray-200">
+                        <Building size={16} /> Nueva Carrera
+                    </button>
+                    <button onClick={() => setShowCourseForm(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm hover:bg-blue-700 shadow-md font-bold">
+                        <Plus size={16} /> Crear Asignatura
+                    </button>
+                 </div>
             </div>
+            
+            {careers.length === 0 && (
+                <div className="text-center py-10 bg-white border-2 border-dashed border-gray-200 rounded-3xl">
+                    <p className="text-gray-400">No hay carreras registradas.</p>
+                    <button onClick={() => setShowCareerForm(true)} className="mt-2 text-blue-600 font-bold underline">Crear la primera carrera</button>
+                </div>
+            )}
+
             {careers.map(career => {
                 const careerCourses = courses.filter(c => c.career_id === career.id);
-                if(careerCourses.length === 0) return null;
                 const periods = Array.from(new Set(careerCourses.map(c => c.period))).sort();
 
                 return (
@@ -491,18 +543,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
                                 <h4 className="font-bold text-gray-800">{career.name}</h4>
                                 <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-bold">{career.code}</span>
                             </div>
-                            <button onClick={() => confirmExport(`Pensum ${career.name}`, () => exportPensum(career))} className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-50">
-                                <Download size={14}/> Descargar Pensum
-                            </button>
+                            <div className="flex gap-2">
+                                <button onClick={() => confirmExport(`Pensum ${career.name}`, () => exportPensum(career))} className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-50">
+                                    <Download size={14}/> Descargar Pensum
+                                </button>
+                                <button onClick={() => handleDeleteCareer(career.id)} className="text-xs bg-white border border-red-200 text-red-500 px-3 py-1.5 rounded-lg font-bold hover:bg-red-50">
+                                    <Trash2 size={14}/> Eliminar
+                                </button>
+                            </div>
                         </div>
                         <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {periods.length === 0 && <p className="text-sm text-gray-400 italic">No hay asignaturas registradas para esta carrera.</p>}
                             {periods.map(period => (
                                 <div key={period} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50">
                                     <h5 className="text-xs font-bold text-gray-400 uppercase mb-3 border-b border-gray-200 pb-2">{period}</h5>
                                     {careerCourses.filter(c => c.period === period).map(c => (
-                                        <div key={c.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-2 flex justify-between">
-                                            <p className="font-bold text-gray-800 text-sm">{c.name}</p>
-                                            <p className="text-[10px] text-gray-500">{c.code}</p>
+                                        <div key={c.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-2 flex justify-between items-center group">
+                                            <div>
+                                                <p className="font-bold text-gray-800 text-sm">{c.name}</p>
+                                                <p className="text-[10px] text-gray-500">{c.code} • {c.schedule}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-600">{c.professor_name || 'Sin asignar'}</p>
+                                                <button onClick={() => handleDeleteCourse(c.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"><Trash2 size={14}/></button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -687,6 +751,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
         </Modal>
       )}
 
+      {showCareerForm && (
+        <Modal isOpen={true} onClose={() => setShowCareerForm(false)} title="Nueva Carrera">
+             <form onSubmit={handleCreateCareer} className="space-y-4">
+                 <input required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="Nombre Carrera (Ej. Ingeniería de Sistemas)" value={newCareer.name} onChange={e => setNewCareer({...newCareer, name: e.target.value})} />
+                 <input required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="Código (Ej. SIS)" value={newCareer.code} onChange={e => setNewCareer({...newCareer, code: e.target.value})} />
+                 <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Crear Carrera</button>
+             </form>
+        </Modal>
+      )}
+
       {showCourseForm && (
         <Modal isOpen={true} onClose={() => setShowCourseForm(false)} title="Nueva Asignatura">
              <form onSubmit={handleCreateCourse} className="space-y-4">
@@ -695,10 +769,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentView }) => {
                       <input required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="Código" value={newCourse.code} onChange={e => setNewCourse({...newCourse, code: e.target.value})} />
                       <input required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" placeholder="Horario" value={newCourse.schedule} onChange={e => setNewCourse({...newCourse, schedule: e.target.value})} />
                  </div>
-                 <select required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" value={newCourse.career_id} onChange={e => setNewCourse({...newCourse, career_id: e.target.value})}>
-                    <option value="">Carrera...</option>
-                    {careers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                 </select>
+                 
+                 <div>
+                     <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Carrera</label>
+                     <select required className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" value={newCourse.career_id} onChange={e => setNewCourse({...newCourse, career_id: e.target.value})}>
+                        <option value="">Seleccione...</option>
+                        {careers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                     </select>
+                 </div>
+
+                 <div>
+                     <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Docente Asignado</label>
+                     <select className="w-full p-3 border border-gray-200 rounded-xl text-gray-900" value={newCourse.professor_id} onChange={e => setNewCourse({...newCourse, professor_id: e.target.value})}>
+                        <option value="">Sin Asignar</option>
+                        {users.filter(u => u.role === Role.PROFESSOR).map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                     </select>
+                 </div>
+
                  <div className="flex gap-2">
                      <select className="p-3 border border-gray-200 rounded-xl w-2/3 text-gray-900" value={periodType} onChange={e => setPeriodType(e.target.value)}>
                          <option value="Cuatrimestre">Cuatrimestre</option>

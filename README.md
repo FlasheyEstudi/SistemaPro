@@ -91,4 +91,3 @@ El proyecto viene configurado por defecto en **Modo Mock**. Esto significa que p
 ```
 
 Para pasar a producción, consulta el archivo `DEPLOYMENT.md`.
-# SistemaPro

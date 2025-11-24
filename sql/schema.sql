@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS scholarship_apps (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     student_id UUID REFERENCES users(id) ON DELETE CASCADE,
     type_id UUID REFERENCES scholarships(id) ON DELETE CASCADE,
+    reason TEXT,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -1,9 +1,8 @@
 
-import dotenv from 'dotenv';
-dotenv.config();
-import express from 'express';
-import cors from 'cors';
-import { createClient } from '@supabase/supabase-js';
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -36,7 +35,7 @@ app.get('/api/campuses', async (req, res) => {
 
 app.post('/api/campuses', async (req, res) => {
   const { name, theme_color, logo_url, admin_username, admin_password, monthly_tuition } = req.body;
-
+  
   const { data: campus, error: cError } = await supabase
     .from('campuses')
     .insert([{ name, theme_color, logo_url, monthly_tuition: monthly_tuition || 150 }])
@@ -60,30 +59,30 @@ app.post('/api/campuses', async (req, res) => {
     .single();
 
   if (uError) {
-    await supabase.from('campuses').delete().eq('id', campus.id);
-    return res.status(500).json({ error: uError.message });
+      await supabase.from('campuses').delete().eq('id', campus.id);
+      return res.status(500).json({ error: uError.message });
   }
 
   res.status(201).json({ campus, adminUser: user });
 });
 
 app.put('/api/campuses/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const result = await supabase.from('campuses').update(updates).eq('id', id).select().single();
-  sendResponse(res, result);
+    const { id } = req.params;
+    const updates = req.body;
+    const result = await supabase.from('campuses').update(updates).eq('id', id).select().single();
+    sendResponse(res, result);
 });
 
 app.delete('/api/campuses/:id', async (req, res) => {
-  const { id } = req.params;
-  // Cascade delete handles users, courses, etc if configured in DB
-  const result = await supabase.from('campuses').delete().eq('id', id);
-  sendResponse(res, result);
+    const { id } = req.params;
+    // Cascade delete handles users, courses, etc if configured in DB
+    const result = await supabase.from('campuses').delete().eq('id', id);
+    sendResponse(res, result);
 });
 
 app.post('/api/login', async (req, res) => {
   const { campusId, username, password } = req.body;
-
+  
   // SECURITY FIX: Check password
   const result = await supabase
     .from('users')
@@ -92,7 +91,7 @@ app.post('/api/login', async (req, res) => {
     .eq('username', username)
     .eq('password', password) // Basic check
     .single();
-
+  
   if (result.error || !result.data) {
     return res.status(401).json({ error: 'Credenciales inválidas' });
   }
@@ -100,9 +99,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/auth/change-password', async (req, res) => {
-  const { userId, newPass } = req.body;
-  const result = await supabase.from('users').update({ password: newPass }).eq('id', userId);
-  sendResponse(res, result);
+    const { userId, newPass } = req.body;
+    const result = await supabase.from('users').update({ password: newPass }).eq('id', userId);
+    sendResponse(res, result);
 });
 
 // 2. USERS
@@ -111,7 +110,7 @@ app.get('/api/users', async (req, res) => {
   let query = supabase.from('users').select('*').eq('campus_id', campusId);
   if (role) query = query.eq('role', role);
   if (search) {
-    query = query.or(`full_name.ilike.%${search}%,username.ilike.%${search}%`);
+      query = query.or(`full_name.ilike.%${search}%,username.ilike.%${search}%`);
   }
   sendResponse(res, await query);
 });
@@ -129,6 +128,12 @@ app.put('/api/users/:id', async (req, res) => {
   sendResponse(res, result);
 });
 
+app.delete('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await supabase.from('users').delete().eq('id', id);
+  sendResponse(res, result);
+});
+
 // 3. ACADEMIC
 app.get('/api/careers', async (req, res) => {
   const { campusId } = req.query;
@@ -137,9 +142,15 @@ app.get('/api/careers', async (req, res) => {
 });
 
 app.post('/api/careers', async (req, res) => {
-  const career = req.body;
-  const result = await supabase.from('careers').insert([career]).select().single();
-  sendResponse(res, result, 201);
+    const career = req.body;
+    const result = await supabase.from('careers').insert([career]).select().single();
+    sendResponse(res, result, 201);
+});
+
+app.delete('/api/careers/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await supabase.from('careers').delete().eq('id', id);
+  sendResponse(res, result);
 });
 
 app.get('/api/courses', async (req, res) => {
@@ -147,12 +158,12 @@ app.get('/api/courses', async (req, res) => {
   let query = supabase.from('courses').select('*, careers(name), professor:users(full_name)');
   if (campusId) query = query.eq('campus_id', campusId);
   if (professorId) query = query.eq('professor_id', professorId);
-
+  
   const result = await query;
-  if (result.data) {
-    // Flatten professor name for easier UI usage
-    const flat = result.data.map(c => ({ ...c, professor_name: c.professor?.full_name }));
-    return res.json(flat);
+  if(result.data) {
+      // Flatten professor name for easier UI usage
+      const flat = result.data.map(c => ({...c, professor_name: c.professor?.full_name}));
+      return res.json(flat);
   }
   sendResponse(res, result);
 });
@@ -163,47 +174,53 @@ app.post('/api/courses', async (req, res) => {
   sendResponse(res, result, 201);
 });
 
+app.delete('/api/courses/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await supabase.from('courses').delete().eq('id', id);
+  sendResponse(res, result);
+});
+
 // 4. ENROLLMENTS & HISTORY
 app.get('/api/enrollments', async (req, res) => {
   const { studentId } = req.query;
   const result = await supabase
     .from('enrollments')
-    .select('*, courses(*, professor:users(full_name))')
+    .select('*, courses(*, professor:users(full_name))') 
     .eq('student_id', studentId);
   sendResponse(res, result);
 });
 
 app.get('/api/student-history', async (req, res) => {
-  const { studentId } = req.query;
+    const { studentId } = req.query;
+    
+    // Obtener notas
+    const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('*, courses(code, name, schedule)')
+        .eq('student_id', studentId);
+        
+    // Obtener asistencia (resumen)
+    const { data: attendance } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', studentId);
 
-  // Obtener notas
-  const { data: enrollments } = await supabase
-    .from('enrollments')
-    .select('*, courses(code, name, schedule)')
-    .eq('student_id', studentId);
+    if (!enrollments) return res.json([]);
 
-  // Obtener asistencia (resumen)
-  const { data: attendance } = await supabase
-    .from('attendance')
-    .select('*')
-    .eq('student_id', studentId);
+    // Combinar datos
+    const history = enrollments.map(e => {
+        const courseAttendance = attendance ? attendance.filter(a => a.course_id === e.course_id) : [];
+        const absences = courseAttendance.filter(a => a.status === 'absent').length;
+        return {
+            ...e,
+            absences,
+            attendance_rate: courseAttendance.length > 0 
+                ? Math.round(((courseAttendance.length - absences) / courseAttendance.length) * 100)
+                : 100
+        };
+    });
 
-  if (!enrollments) return res.json([]);
-
-  // Combinar datos
-  const history = enrollments.map(e => {
-    const courseAttendance = attendance ? attendance.filter(a => a.course_id === e.course_id) : [];
-    const absences = courseAttendance.filter(a => a.status === 'absent').length;
-    return {
-      ...e,
-      absences,
-      attendance_rate: courseAttendance.length > 0
-        ? Math.round(((courseAttendance.length - absences) / courseAttendance.length) * 100)
-        : 100
-    };
-  });
-
-  res.json(history);
+    res.json(history);
 });
 
 app.get('/api/course-students', async (req, res) => {
@@ -287,7 +304,7 @@ app.get('/api/notifications', async (req, res) => {
   const { userId } = req.query;
   let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
   if (userId) query = query.eq('user_id', userId);
-
+  
   const result = await query;
   sendResponse(res, result);
 });
@@ -299,30 +316,30 @@ app.post('/api/notifications', async (req, res) => {
 
   // Determine recipients
   if (target_type === 'all') {
-    const { data } = await supabase.from('users').select('id').eq('campus_id', campus_id);
-    userIds = data.map(u => u.id);
+      const { data } = await supabase.from('users').select('id').eq('campus_id', campus_id);
+      userIds = data.map(u => u.id);
   } else if (target_type === 'role') {
-    const { data } = await supabase.from('users').select('id').eq('campus_id', campus_id).eq('role', target_id);
-    userIds = data.map(u => u.id);
+      const { data } = await supabase.from('users').select('id').eq('campus_id', campus_id).eq('role', target_id);
+      userIds = data.map(u => u.id);
   } else if (target_type === 'user') {
-    userIds = [target_id];
+      userIds = [target_id];
   }
 
   if (userIds.length === 0) return res.status(400).json({ error: 'No recipients found' });
 
   // Bulk Insert
   const notifications = userIds.map(uid => ({
-    user_id: uid,
-    title,
-    message,
-    type,
-    sender_name,
-    read: false,
-    created_at: new Date().toISOString()
+      user_id: uid,
+      title,
+      message,
+      type,
+      sender_name,
+      read: false,
+      created_at: new Date().toISOString()
   }));
 
   const result = await supabase.from('notifications').insert(notifications);
-
+  
   if (result.error) return res.status(500).json({ error: result.error.message });
   res.status(201).json({ count: userIds.length, message: 'Notifications sent' });
 });
@@ -334,14 +351,14 @@ app.get('/api/scholarship-types', async (req, res) => {
 });
 
 app.post('/api/scholarship-types', async (req, res) => {
-  const result = await supabase.from('scholarships').insert([req.body]).select().single();
-  sendResponse(res, result, 201);
+    const result = await supabase.from('scholarships').insert([req.body]).select().single();
+    sendResponse(res, result, 201);
 });
 
 app.put('/api/scholarship-types/:id', async (req, res) => {
-  const { id } = req.params;
-  const result = await supabase.from('scholarships').update(req.body).eq('id', id).select().single();
-  sendResponse(res, result);
+    const { id } = req.params;
+    const result = await supabase.from('scholarships').update(req.body).eq('id', id).select().single();
+    sendResponse(res, result);
 });
 
 app.delete('/api/scholarship-types/:id', async (req, res) => {
@@ -354,7 +371,7 @@ app.get('/api/scholarship-applications', async (req, res) => {
   const { studentId } = req.query;
   let query = supabase.from('scholarship_apps').select('*, student:users(full_name), type:scholarships(name, percentage)');
   if (studentId) query = query.eq('student_id', studentId);
-
+  
   const result = await query;
   if (result.data) {
     const flatData = result.data.map(app => ({
@@ -380,32 +397,50 @@ app.put('/api/scholarship-applications/:id/status', async (req, res) => {
   sendResponse(res, result);
 });
 
-// 10. STATS (Dynamic Revenue)
+// 10. STATS (Dynamic Revenue & Scholarships)
 app.get('/api/stats/dashboard', async (req, res) => {
-  const { campusId } = req.query;
+    const { campusId } = req.query;
+    
+    // Get Tuition Cost
+    const { data: campus } = await supabase.from('campuses').select('monthly_tuition').eq('id', campusId).single();
+    const tuition = campus ? campus.monthly_tuition : 0;
 
-  // Get Tuition Cost
-  const { data: campus } = await supabase.from('campuses').select('monthly_tuition').eq('id', campusId).single();
-  const tuition = campus ? campus.monthly_tuition : 150;
+    const [students, professors, courses] = await Promise.all([
+        supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'student'),
+        supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'professor'),
+        supabase.from('courses').select('id', { count: 'exact' }).eq('campus_id', campusId)
+    ]);
 
-  const [students, professors, courses, scholarships] = await Promise.all([
-    supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'student'),
-    supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'professor'),
-    supabase.from('courses').select('id', { count: 'exact' }).eq('campus_id', campusId),
-    supabase.from('scholarship_apps').select('id', { count: 'exact' }).eq('status', 'approved')
-  ]);
+    // Calculate Scholarship Stats
+    // Assuming we want to count active/approved scholarships linked to students in this campus
+    // Since scholarship_apps table links to students (users), and users link to campus.
+    const { data: scholarshipApps } = await supabase
+        .from('scholarship_apps')
+        .select('id, type:scholarships(percentage), student:users(campus_id)')
+        .eq('status', 'approved');
+        
+    // Filter for current campus in JS (or join in SQL if preferred, this is simpler for now)
+    const campusScholarships = scholarshipApps ? scholarshipApps.filter(app => app.student?.campus_id === campusId) : [];
+    
+    const scholarshipsGiven = campusScholarships.length;
+    // Estimate Budget: e.g. average tuition * percentage coverage
+    // If tuition is 0 (Free University), budget metric might be just "aid value" or 0
+    let scholarshipBudget = 0;
+    if (tuition > 0) {
+        scholarshipBudget = campusScholarships.reduce((acc, app) => acc + (tuition * (app.type?.percentage || 0) / 100), 0);
+    } else {
+        // For free university, maybe assign a fixed value per scholarship for "Books/Transport" simulation
+        scholarshipBudget = scholarshipsGiven * 500; 
+    }
 
-  const scholarshipsGiven = scholarships.count || 0;
-  const scholarshipBudget = scholarshipsGiven * 500; // Estimated
-
-  res.json({
-    students: students.count || 0,
-    professors: professors.count || 0,
-    courses: courses.count || 0,
-    monthlyRevenue: (students.count || 0) * tuition,
-    scholarshipsGiven,
-    scholarshipBudget
-  });
+    res.json({
+        students: students.count || 0,
+        professors: professors.count || 0,
+        courses: courses.count || 0,
+        monthlyRevenue: (students.count || 0) * tuition,
+        scholarshipsGiven,
+        scholarshipBudget
+    });
 });
 
 app.listen(port, () => {
