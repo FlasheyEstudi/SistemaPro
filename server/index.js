@@ -388,16 +388,23 @@ app.get('/api/stats/dashboard', async (req, res) => {
   const { data: campus } = await supabase.from('campuses').select('monthly_tuition').eq('id', campusId).single();
   const tuition = campus ? campus.monthly_tuition : 150;
 
-  const [students, professors, courses] = await Promise.all([
+  const [students, professors, courses, scholarships] = await Promise.all([
     supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'student'),
     supabase.from('users').select('id', { count: 'exact' }).eq('campus_id', campusId).eq('role', 'professor'),
-    supabase.from('courses').select('id', { count: 'exact' }).eq('campus_id', campusId)
+    supabase.from('courses').select('id', { count: 'exact' }).eq('campus_id', campusId),
+    supabase.from('scholarship_apps').select('id', { count: 'exact' }).eq('status', 'approved')
   ]);
+
+  const scholarshipsGiven = scholarships.count || 0;
+  const scholarshipBudget = scholarshipsGiven * 500; // Estimated
+
   res.json({
     students: students.count || 0,
     professors: professors.count || 0,
     courses: courses.count || 0,
-    monthlyRevenue: (students.count || 0) * tuition
+    monthlyRevenue: (students.count || 0) * tuition,
+    scholarshipsGiven,
+    scholarshipBudget
   });
 });
 

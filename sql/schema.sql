@@ -132,3 +132,26 @@ CREATE TABLE IF NOT EXISTS notes (
 -- RLS Policies (Optional: Enable RLS for better security)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campuses ENABLE ROW LEVEL SECURITY;
+
+-- ==========================================
+-- DATOS INICIALES (SEED DATA)
+-- ==========================================
+
+-- Limpiar datos anteriores para evitar duplicados al reiniciar
+TRUNCATE TABLE users, campuses, courses, enrollments, careers, attendance, scholarships, scholarship_apps, notifications, course_resources, notes CASCADE;
+
+-- 1. Crear Campus Principal
+INSERT INTO campuses (name, theme_color, monthly_tuition)
+VALUES ('Campus Principal', 'blue', 0);
+
+-- 2. Crear Usuario Admin vinculado al campus
+DO $$
+DECLARE
+  campus_id uuid;
+BEGIN
+  SELECT id INTO campus_id FROM campuses LIMIT 1;
+  
+  INSERT INTO users (username, password, full_name, email, role, campus_id)
+  VALUES 
+  ('admin', '123456', 'Director General', 'admin@uni.edu', 'admin', campus_id);
+END $$;
